@@ -152,7 +152,6 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: pdlua-${{ matrix.os }}
-        path: pdlua-${{ matrix.os }}
 
     - name: check deken package
       shell: bash
@@ -184,17 +183,14 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: pdlua-windows
-        path: pdlua-windows
 
     - uses: actions/download-artifact@v4
       with:
         name: pdlua-macos
-        path: pdlua-macos
 
     - uses: actions/download-artifact@v4
       with:
         name: pdlua-ubuntu
-        path: pdlua-ubuntu
 
     - name: upload deken package
       shell: bash
