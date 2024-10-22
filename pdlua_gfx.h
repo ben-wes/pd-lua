@@ -441,6 +441,7 @@ static int draw_text(lua_State* L) {
     SETFLOAT(args + 2, luaL_checknumber(L, 3)); // y
     SETFLOAT(args + 3, luaL_checknumber(L, 4)); // w
     SETFLOAT(args + 4, luaL_checknumber(L, 5)); // h
+    // FIXME: ignoring the optional alignment parameter for plugdata for now
     plugdata_draw(gfx->object, gfx->current_layer, gensym("lua_draw_text"), 5, args);
     return 0;
 }
@@ -1291,6 +1292,7 @@ static int draw_text(lua_State* L) {
     int font_height = luaL_checknumber(L, 5);
     font_height = sys_hostfontsize(font_height, glist_getzoom(cnv));
 
+    int alignment = lua_gettop(L) >= 6 ? luaL_checkinteger(L, 6) : 0; // Default to TOP_LEFT
     transform_point(gfx, &x, &y);
     transform_size(gfx, &w, &font_height);
 
@@ -1305,8 +1307,22 @@ static int draw_text(lua_State* L) {
     const char* tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
+    // Convert alignment value to tcl/tk anchor point
+    const char* anchor;
+    switch (alignment) {
+        case 1:  anchor = "n"; break;      // TOP_CENTER
+        case 2:  anchor = "ne"; break;     // TOP_RIGHT
+        case 3:  anchor = "w"; break;      // CENTER_LEFT
+        case 4:  anchor = "center"; break; // CENTER
+        case 5:  anchor = "e"; break;      // CENTER_RIGHT
+        case 6:  anchor = "sw"; break;     // BOTTOM_LEFT
+        case 7:  anchor = "s"; break;      // BOTTOM_CENTER
+        case 8:  anchor = "se"; break;     // BOTTOM_RIGHT
+        default: anchor = "nw"; break;     // TOP_LEFT
+    }
+
     pdgui_vmess(0, "crr ii rs ri rs rS", cnv, "create", "text",
-                0, 0, "-anchor", "nw", "-width", w, "-text", text, "-tags", 3, tags);
+                0, 0, "-anchor", anchor, "-width", w, "-text", text, "-tags", 3, tags);
 
     t_atom fontatoms[3];
     SETSYMBOL(fontatoms+0, gensym(sys_font));
