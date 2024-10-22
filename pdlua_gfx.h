@@ -1289,10 +1289,9 @@ static int draw_text(lua_State* L) {
     int x = luaL_checknumber(L, 2);
     int y = luaL_checknumber(L, 3);
     int w = luaL_checknumber(L, 4);
-    int font_height = luaL_checknumber(L, 5);
-    font_height = sys_hostfontsize(font_height, glist_getzoom(cnv));
+    int font_height = sys_hostfontsize(luaL_checknumber(L, 5), glist_getzoom(cnv));
+    int alignment = luaL_optinteger(L, 6, 0); // Defaults to TOP_LEFT
 
-    int alignment = lua_gettop(L) >= 6 ? luaL_checkinteger(L, 6) : 0; // Default to TOP_LEFT
     transform_point(gfx, &x, &y);
     transform_size(gfx, &w, &font_height);
 
