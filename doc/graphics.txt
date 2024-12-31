@@ -71,7 +71,7 @@ p = Path(x, y)                                                 -- Initiates a ne
 p:line_to(x, y)                                                -- Adds a line segment to the path
 p:quad_to(x1, y1, x2, y2)                                      -- Adds a quadratic Bezier curve to the path
 p:cubic_to(x1, y1, x2, y2, x3, y)                              -- Adds a cubic Bezier curve to the path
-p:close_path()                                                 -- Closes the path
+p:close()                                                      -- Closes the path
 
 g:stroke_path(p, line_width)                                   -- Draws the outline of the path with the specified line width
 g:fill_path(p)                                                 -- Fills the current path
