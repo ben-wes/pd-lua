@@ -789,18 +789,27 @@ static void pdlua_motion(t_gobj *z, t_floatarg dx, t_floatarg dy,
 #endif
 {
 #if !PLUGDATA
+    t_pdlua *x = (t_pdlua *)z;
+    if (!x->has_gui) return;
+
 #ifndef PURR_DATA
-    if (!up)
-#endif
-    {
-        t_pdlua *x = (t_pdlua *)z;
-        x->gfx.mouse_drag_x = x->gfx.mouse_drag_x + dx;
-        x->gfx.mouse_drag_y = x->gfx.mouse_drag_y + dy;
+    // Handle mouse up immediately
+    if (up && x->gfx.mouse_down) {
         int zoom = glist_getzoom(glist_getcanvas(x->canvas));
-        int xpos = (x->gfx.mouse_drag_x - text_xpix(&x->pd, x->canvas)) / zoom;
-        int ypos = (x->gfx.mouse_drag_y - text_ypix(&x->pd, x->canvas)) / zoom;
-        pdlua_gfx_mouse_drag(x, xpos, ypos);
+        int xpos = (x->gfx.mouse_x - text_xpix(&x->pd, x->canvas)) / zoom;
+        int ypos = (x->gfx.mouse_y - text_ypix(&x->pd, x->canvas)) / zoom;
+        pdlua_gfx_mouse_up(x, xpos, ypos);
+        x->gfx.mouse_down = 0;
+        return;
     }
+#endif
+
+    x->gfx.mouse_x += dx;
+    x->gfx.mouse_y += dy;    
+    int zoom = glist_getzoom(glist_getcanvas(x->canvas));
+    int xpos = (x->gfx.mouse_x - text_xpix(&x->pd, x->canvas)) / zoom;
+    int ypos = (x->gfx.mouse_y - text_ypix(&x->pd, x->canvas)) / zoom;
+    pdlua_gfx_mouse_drag(x, xpos, ypos);
 #endif
 }
 
@@ -812,33 +821,31 @@ static int pdlua_click(t_gobj *z, t_glist *gl, int xpos, int ypos, int shift, in
         int zoom = glist_getzoom(gl);
         int xpix = (xpos - text_xpix(&x->pd, gl)) / zoom; 
         int ypix = (ypos - text_ypix(&x->pd, gl)) / zoom;
-                
-        if(doit){
-            if(!x->gfx.mouse_down)
-            {
-                pdlua_gfx_mouse_down(x, xpix, ypix);
-                x->gfx.mouse_drag_x = xpos;
-                x->gfx.mouse_drag_y = ypos;
-            }
-            
-            glist_grab(x->canvas, &x->pd.te_g, (t_glistmotionfn)pdlua_motion, NULL, xpos, ypos);
-        }
-        else {
-            pdlua_gfx_mouse_move(x, xpix, ypix);
-            
+
+        if (doit) {
+            x->gfx.mouse_down = 1;
+            x->gfx.mouse_x = xpos;
+            x->gfx.mouse_y = ypos;
+            pdlua_gfx_mouse_down(x, xpix, ypix);
+            glist_grab(gl, &x->pd.te_g, (t_glistmotionfn)pdlua_motion, NULL, xpos, ypos);
+        } else {
+            // Handle mouse up here for Purr Data
+            // (Vanilla PD handles it in pdlua_motion with the 'up' flag)
             if(x->gfx.mouse_down)
             {
                 pdlua_gfx_mouse_up(x, xpix, ypix);
+                x->gfx.mouse_down = 0;
+            } else {
+                x->gfx.mouse_x = xpos;
+                x->gfx.mouse_y = ypos;
+                pdlua_gfx_mouse_move(x, xpix, ypix);
             }
         }
-        
-        x->gfx.mouse_down = doit;
         return 1;
     } else
 #endif
     return text_widgetbehavior.w_clickfn(z, gl, xpos, ypos, shift, alt, dbl, doit);
 }
-
 
 static void pdlua_displace(t_gobj *z, t_glist *glist, int dx, int dy){
     t_pdlua *x = (t_pdlua *)z;
@@ -1451,8 +1458,8 @@ static int pdlua_object_new(lua_State *L)
                
 #if !PLUGDATA
                 // Init graphics state for pd
-                o->gfx.mouse_drag_x = 0;
-                o->gfx.mouse_drag_y = 0;
+                o->gfx.mouse_x = 0;
+                o->gfx.mouse_y = 0;
                 o->gfx.mouse_down = 0;
 #else
                 // NULL until plugdata overrides them with something useful
