@@ -42,9 +42,10 @@ typedef struct _pdlua_gfx
     int num_transforms;
     char current_color[10]; // Keep track of current color
     
-    // Variables to keep track of mouse button state and drag position
-    int mouse_x, mouse_y, mouse_down;
+    // Variables to keep track of mouse position, button state and whether the mouse is inside the object
+    int mouse_x, mouse_y, mouse_down, mouse_inside;
     int first_draw;
+    struct pdlua_proxycanvas *proxycanvas;
 #else
     int current_layer;
     void(*plugdata_draw_callback)(void*, int, t_symbol*, int, t_atom*); // Callback to perform drawing in plugdata
