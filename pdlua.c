@@ -581,6 +581,7 @@ static void pdlua_proxyclock_setup(void)
 /** Setup the proxy class for canvas events. */
 static void pdlua_proxycanvas_setup(void)
 {
+#if !PLUGDATA
     pdlua_proxycanvas_class = class_new(
         gensym("pdlua proxy canvas"), 0,
         (t_method)pdlua_proxycanvas_free,
@@ -589,6 +590,7 @@ static void pdlua_proxycanvas_setup(void)
         0);        
     if (pdlua_proxycanvas_class)
         class_addanything(pdlua_proxycanvas_class, (t_method)pdlua_proxycanvas_anything);
+#endif
 }
 
 /** Dump an array of atoms into a Lua table. */
@@ -811,7 +813,7 @@ static t_pdlua *pdlua_new
         if (lua_islightuserdata(__L(), -1))
         {
             object = lua_touserdata(__L(), -1);
-            
+#if !PLUGDATA
             // Create canvas proxy if we have GUI
             if (object->has_gui) {
                 t_canvas *parent_canvas = glist_getcanvas(object->canvas);
@@ -825,7 +827,7 @@ static t_pdlua *pdlua_new
                     return NULL;
                 }
             }
-            
+#endif
             lua_pop(__L(), 2);/* pop the userdata and the global "pd" */
             PDLUA_DEBUG2("pdlua_new: before returning object %p stack top %d", object, lua_gettop(__L()));
             return object;
@@ -892,11 +894,13 @@ static void pdlua_delete(t_gobj *z, t_glist *glist) {
     
     canvas_deletelinesfor(glist, (t_text *)z);
     
+#if !PLUGDATA
     if (x->gfx.proxycanvas) {
         // Schedule deferred cleanup (similar to receivecanvas external code)
         clock_delay(x->gfx.proxycanvas->p_clock, 0);
         x->gfx.proxycanvas = NULL;
     }
+#endif
 }
 
 #ifdef PURR_DATA // Purr Data uses an older version of this API
