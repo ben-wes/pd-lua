@@ -59,8 +59,13 @@
 
 #include "pdlua_gfx.h"
 
-typedef void (*t_signal_setmultiout)(t_signal **, int); 
-static t_signal_setmultiout g_signal_setmultiout;
+// function pointer type for signal_setmultiout (added with Pd 0.54)
+typedef void (*t_signal_setmultiout_fn)(t_signal **, int); 
+static t_signal_setmultiout_fn g_signal_setmultiout;
+
+// function pointer type for glist_getrtext/glist_findrtext (changes with Pd 0.56)
+typedef t_rtext *(*t_glist_rtext_fn)(t_glist *, t_text *);
+static t_glist_rtext_fn g_glist_getrtext;
 
 // Check for absolute filenames in the second argument. Otherwise,
 // open_via_path will happily prepend the given path anyway.
@@ -1311,7 +1316,7 @@ static int pdlua_set_arguments(lua_State *L)
             if (redraw) {
                 // update the text in the object box; this makes sure that
                 // the arguments in the display are what we just set
-                t_rtext *y = glist_findrtext(o->canvas, x);
+                t_rtext *y = g_glist_getrtext(o->canvas, x);
                 rtext_retext(y);
                 // redraw the object and its iolets (including incident
                 // cord lines), in case the object box size has changed
@@ -3038,7 +3043,7 @@ void pdlua_setup(void)
 #endif
     post(luaversionStr);
 
-// multichannel handling copied from https://github.com/Spacechild1/vstplugin/blob/3f0ed8a800ea238bf204a2ead940b2d1324ac909/pd/src/vstplugin~.cpp#L4122-L4136
+// compatibility handling copied from https://github.com/Spacechild1/vstplugin/blob/3f0ed8a800ea238bf204a2ead940b2d1324ac909/pd/src/vstplugin~.cpp#L4122-L4136
 #ifdef _WIN32
     // get a handle to the module containing the Pd API functions.
     // NB: GetModuleHandle("pd.dll") does not cover all cases.
@@ -3046,14 +3051,29 @@ void pdlua_setup(void)
     if (GetModuleHandleEx(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             (LPCSTR)&pd_typedmess, &module)) {
-        g_signal_setmultiout = (t_signal_setmultiout)(void *)GetProcAddress(
+        g_signal_setmultiout = (t_signal_setmultiout_fn)(void *)GetProcAddress(
             module, "signal_setmultiout");
+        g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_getrtext");
+        if (!g_glist_getrtext)
+            g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_findrtext");
     }
 #else
     // search recursively, starting from the main program
-    g_signal_setmultiout = (t_signal_setmultiout)dlsym(
+    g_signal_setmultiout = (t_signal_setmultiout_fn)dlsym(
         dlopen(NULL, RTLD_NOW), "signal_setmultiout");
+    g_glist_getrtext = (t_glist_rtext_fn)dlsym(
+        dlopen(NULL, RTLD_NOW), "glist_getrtext");
+    if (!g_glist_getrtext)
+        g_glist_getrtext = (t_glist_rtext_fn)dlsym(
+            dlopen(NULL, RTLD_NOW), "glist_findrtext");
 #endif
+
+    // check if g_glist_getrtext was loaded successfully
+    if (!g_glist_getrtext) {
+        pd_error(NULL, "pdlua: failed to load pd's glist_getrtext/glist_findrtext functions");
+        pd_error(NULL, "pdlua: loader will not be registered!");
+        return;
+    }
 
     pdlua_proxyinlet_setup();
     PDLUA_DEBUG("pdlua pdlua_proxyinlet_setup done", 0);
