@@ -60,12 +60,12 @@
 #include "pdlua_gfx.h"
 
 // function pointer type for signal_setmultiout (added with Pd 0.54)
-typedef void (*t_signal_setmultiout_fn)(t_signal **, int); 
-static t_signal_setmultiout_fn g_signal_setmultiout;
+typedef void (*t_signal_setmultiout)(t_signal **, int); 
+static t_signal_setmultiout g_signal_setmultiout;
 
 // function pointer type for glist_getrtext/glist_findrtext (changes with Pd 0.56)
-typedef t_rtext *(*t_glist_rtext_fn)(t_glist *, t_text *);
-static t_glist_rtext_fn g_glist_getrtext;
+typedef t_rtext *(*t_glist_rtext)(t_glist *, t_text *);
+static t_glist_rtext g_glist_getrtext;
 
 // Check for absolute filenames in the second argument. Otherwise,
 // open_via_path will happily prepend the given path anyway.
@@ -3051,20 +3051,20 @@ void pdlua_setup(void)
     if (GetModuleHandleEx(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             (LPCSTR)&pd_typedmess, &module)) {
-        g_signal_setmultiout = (t_signal_setmultiout_fn)(void *)GetProcAddress(
+        g_signal_setmultiout = (t_signal_setmultiout)(void *)GetProcAddress(
             module, "signal_setmultiout");
-        g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_getrtext");
+        g_glist_getrtext = (t_glist_rtext)(void *)GetProcAddress(module, "glist_getrtext");
         if (!g_glist_getrtext)
-            g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_findrtext");
+            g_glist_getrtext = (t_glist_rtext)(void *)GetProcAddress(module, "glist_findrtext");
     }
 #else
     // search recursively, starting from the main program
-    g_signal_setmultiout = (t_signal_setmultiout_fn)dlsym(
+    g_signal_setmultiout = (t_signal_setmultiout)dlsym(
         dlopen(NULL, RTLD_NOW), "signal_setmultiout");
-    g_glist_getrtext = (t_glist_rtext_fn)dlsym(
+    g_glist_getrtext = (t_glist_rtext)dlsym(
         dlopen(NULL, RTLD_NOW), "glist_getrtext");
     if (!g_glist_getrtext)
-        g_glist_getrtext = (t_glist_rtext_fn)dlsym(
+        g_glist_getrtext = (t_glist_rtext)dlsym(
             dlopen(NULL, RTLD_NOW), "glist_findrtext");
 #endif
 
