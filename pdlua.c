@@ -3043,35 +3043,14 @@ void pdlua_setup(void)
 #endif
     post(luaversionStr);
 
-// compatibility handling copied from https://github.com/Spacechild1/vstplugin/blob/3f0ed8a800ea238bf204a2ead940b2d1324ac909/pd/src/vstplugin~.cpp#L4122-L4136
-#ifdef _WIN32
-    // get a handle to the module containing the Pd API functions.
-    // NB: GetModuleHandle("pd.dll") does not cover all cases.
-    HMODULE module;
-    if (GetModuleHandleEx(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCSTR)&pd_typedmess, &module)) {
-        g_signal_setmultiout = (t_signal_setmultiout_fn)(void *)GetProcAddress(
-            module, "signal_setmultiout");
-        g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_getrtext");
-        if (!g_glist_getrtext)
-            g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_findrtext");
-    }
-#else
-    // search recursively, starting from the main program
-    g_signal_setmultiout = (t_signal_setmultiout_fn)dlsym(
-        dlopen(NULL, RTLD_NOW), "signal_setmultiout");
-    g_glist_getrtext = (t_glist_rtext_fn)dlsym(
-        dlopen(NULL, RTLD_NOW), "glist_getrtext");
-    if (!g_glist_getrtext)
-        g_glist_getrtext = (t_glist_rtext_fn)dlsym(
-            dlopen(NULL, RTLD_NOW), "glist_findrtext");
-#endif
+    // get the signal_setmultiout and glist_getrtext functions from Pd's API (if available)
+    g_signal_setmultiout = (t_signal_setmultiout_fn)sys_getfunbyname("signal_setmultiout");
+    g_glist_getrtext = (t_glist_rtext_fn)sys_getfunbyname("glist_getrtext");
 
-    // check if g_glist_getrtext was loaded successfully
-    if (!g_glist_getrtext) {
-        pd_error(NULL, "pdlua: failed to load pd's glist_getrtext/glist_findrtext functions");
-        pd_error(NULL, "pdlua: loader will not be registered!");
+    // if glist_getrtext is not available, try glist_findrtext from Pd versions < 0.56
+    if (!g_glist_getrtext && !(g_glist_getrtext = (t_glist_rtext_fn)sys_getfunbyname("glist_findrtext"))) {
+        pd_error(NULL, "lua: failed to load pd's glist_getrtext/glist_findrtext functions");
+        pd_error(NULL, "lua: loader will not be registered!");
         return;
     }
 
