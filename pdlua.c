@@ -1051,7 +1051,7 @@ static void pdlua_menu_open(t_pdlua *o)
         if (nw_gui_vmess)
           nw_gui_vmess("open_textfile", "s", pathname);
         else
-          sys_vgui("::pd_menucommands::menu_openfile {%s}\n", pathname);
+          pdgui_vmess("::pd_menucommands::menu_openfile", "s", pathname);
 #endif
     } else {
         lua_pop(__L(), 2); /* pop name, global "pd"*/
@@ -1886,7 +1886,7 @@ static int pdlua_clock_free(lua_State *L)
 
 static int pdlua_systime(lua_State *L)
 {
-    lua_pushnumber(L, clock_getsystime());
+    lua_pushnumber(L, clock_getlogicaltime());
     return 1;
 }
 
