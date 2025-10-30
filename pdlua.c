@@ -209,13 +209,6 @@ char pdlua_datadir[MAXPDSTRING];
 #endif
 static char pdlua_cwd[MAXPDSTRING];
 
-/** State for the Lua file reader. */
-typedef struct pdlua_readerdata
-{
-    int         fd; /**< File descriptor to read from. */
-    char        buffer[MAXPDSTRING]; /**< Buffer to read into. */
-} t_pdlua_readerdata;
-
 /** Proxy inlet object data. */
 typedef struct pdlua_proxyinlet
 {
@@ -240,8 +233,6 @@ typedef struct pdlua_proxyclock
     t_clock         *clock; /** Pd clock to use. */
 } t_pdlua_proxyclock;
 /* prototypes*/
-
-static const char *pdlua_reader (lua_State *L, void *rr, size_t *size);
 /** Proxy inlet 'anything' method. */
 static void pdlua_proxyinlet_anything (t_pdlua_proxyinlet *p, t_symbol *s, int argc, t_atom *argv);
 /** Proxy inlet initialization. */
@@ -353,31 +344,6 @@ static t_class *pdlua_proxyinlet_class;
 static t_class *pdlua_proxyreceive_class;
 /** Proxy clock class pointer. */
 static t_class *pdlua_proxyclock_class;
-
-/** Lua file reader callback. */
-static const char *pdlua_reader
-(
-    lua_State *UNUSED(L), /**< Lua interpreter state. */
-    void *rr, /**< Lua file reader state. */
-    size_t *size /**< How much data we have read. */
-)
-{
-    t_pdlua_readerdata  *r = rr;
-    ssize_t             s;
-    PDLUA_DEBUG("pdlua_reader: fd is %d", r->fd);
-    s = read(r->fd, r->buffer, MAXPDSTRING-2);
-    PDLUA_DEBUG("pdlua_reader: s is %ld", s);////////
-    if (s <= 0)
-    {
-        *size = 0;
-        return NULL;
-    }
-    else
-    {
-        *size = s;
-        return r->buffer;
-    }
-}
 
 /** Proxy inlet 'anything' method. */
 static void pdlua_proxyinlet_anything
@@ -634,7 +600,6 @@ static t_pdlua *pdlua_new
     if(needs_base) {
         char                buf[MAXPDSTRING];
         char                *ptr;
-        t_pdlua_readerdata  reader;
         t_canvas* current = canvas_getcurrent();
         int fd = canvas_open(current, s->s_name, ".pd_lua", buf, &ptr, MAXPDSTRING, 1);
         if (fd >= 0)
@@ -656,32 +621,20 @@ static t_pdlua *pdlua_new
             //pdlua_setpathname(o, buf);/* change the scriptname to include its path 
             pdlua_setrequirepath(__L(), buf);
             class_set_extern_dir(gensym(buf));
-            strncpy(buf, s->s_name, MAXPDSTRING - 8);
-            strcat(buf, ".pd_lua");
-            reader.fd = fd;
-            n = lua_gettop(__L());
-#if LUA_VERSION_NUM	< 502
-            if (lua_load(__L(), pdlua_reader, &reader, buf))
-#else // 5.2 style
-            if (lua_load(__L(), pdlua_reader, &reader, buf, NULL))
-#endif // LUA_VERSION_NUM	< 502
             {
-                close(fd);
-                pdlua_clearrequirepath(__L());
-                mylua_error(__L(), NULL, NULL);
-            }
-            else
-            {
-                if (lua_pcall(__L(), 0, LUA_MULTRET, 0))
+                char fullpath[MAXPDSTRING];
+                snprintf(fullpath, MAXPDSTRING, "%s/%s.pd_lua", buf, s->s_name);
+                sys_close(fd);
+                n = lua_gettop(__L());
+                if (luaL_loadfile(__L(), fullpath))
                 {
-                    mylua_error(__L(), NULL, NULL);
-                    close(fd);
                     pdlua_clearrequirepath(__L());
+                    mylua_error(__L(), NULL, NULL);
                 }
                 else
                 {
-                    /* succeeded */
-                    close(fd);
+                    if (lua_pcall(__L(), 0, LUA_MULTRET, 0))
+                        mylua_error(__L(), NULL, NULL);
                     pdlua_clearrequirepath(__L());
                 }
             }
@@ -2505,7 +2458,6 @@ static int pdlua_dofilex(lua_State *L)
 {
     char                buf[MAXPDSTRING];
     char                *ptr;
-    t_pdlua_readerdata  reader;
     int                 fd;
     int                 n;
     const char          *filename;
@@ -2525,16 +2477,13 @@ static int pdlua_dofilex(lua_State *L)
               buf, &ptr, MAXPDSTRING, 1);
             if (fd >= 0)
             {
-                PDLUA_DEBUG("pdlua_dofilex path is %s", buf);
+                char fullpath[MAXPDSTRING];
+                sys_close(fd);
+                snprintf(fullpath, MAXPDSTRING, "%s/%s", buf, ptr);
+                PDLUA_DEBUG("pdlua_dofilex path is %s", fullpath);
                 pdlua_setrequirepath(L, buf);
-                reader.fd = fd;
-#if LUA_VERSION_NUM	< 502
-                if (lua_load(L, pdlua_reader, &reader, filename))
-#else // 5.2 style
-                if (lua_load(L, pdlua_reader, &reader, filename, NULL))
-#endif // LUA_VERSION_NUM	< 502
+                if (luaL_loadfile(L, fullpath))
                 {
-                    close(fd);
                     pdlua_clearrequirepath(L);
                     mylua_error(L, NULL, NULL);
                 }
@@ -2543,13 +2492,11 @@ static int pdlua_dofilex(lua_State *L)
                     if (lua_pcall(L, 0, LUA_MULTRET, 0))
                     {
                         mylua_error(L, NULL, NULL);
-                        close(fd);
                         pdlua_clearrequirepath(L);
                     }
                     else
                     {
                         /* succeeded */
-                        close(fd);
                         pdlua_clearrequirepath(L);
                     }
                 }
@@ -2577,7 +2524,6 @@ static int pdlua_dofile(lua_State *L)
 {
     char                buf[MAXPDSTRING];
     char                *ptr;
-    t_pdlua_readerdata  reader;
     int                 fd;
     int                 n;
     const char          *filename;
@@ -2595,17 +2541,13 @@ static int pdlua_dofile(lua_State *L)
             fd = canvas_open(o->canvas, filename, "", buf, &ptr, MAXPDSTRING, 1);
             if (fd >= 0)
             {
-                PDLUA_DEBUG("pdlua_dofile path is %s", buf);
-                //pdlua_setpathname(o, buf);/* change the scriptname to include its path */
+                char fullpath[MAXPDSTRING];
+                sys_close(fd);
+                snprintf(fullpath, MAXPDSTRING, "%s/%s", buf, ptr);
+                PDLUA_DEBUG("pdlua_dofile path is %s", fullpath);
                 pdlua_setrequirepath(L, buf);
-                reader.fd = fd;
-#if LUA_VERSION_NUM	< 502
-                if (lua_load(L, pdlua_reader, &reader, filename))
-#else // 5.2 style
-                if (lua_load(L, pdlua_reader, &reader, filename, NULL))
-#endif // LUA_VERSION_NUM	< 502
+                if (luaL_loadfile(L, fullpath))
                 {
-                    close(fd);
                     pdlua_clearrequirepath(L);
                     mylua_error(L, o, NULL);
                 }
@@ -2614,13 +2556,11 @@ static int pdlua_dofile(lua_State *L)
                     if (lua_pcall(L, 0, LUA_MULTRET, 0))
                     {
                         mylua_error(L, NULL, NULL);
-                        close(fd);
                         pdlua_clearrequirepath(L);
                     }
                     else
                     {
                         /* succeeded */
-                        close(fd);
                         pdlua_clearrequirepath(L);
                     }
                 }
@@ -2830,20 +2770,13 @@ static int pdlua_loader_fromfd
     const char *dirbuf /**< The name of the directory the .pd_lua files lives in */
 )
 {
-    t_pdlua_readerdata  reader;
-
     PDLUA_DEBUG("pdlua_loader: stack top %d", lua_gettop(__L()));
     class_set_extern_dir(gensym(dirbuf));
     pdlua_setrequirepath(__L(), dirbuf);
-    reader.fd = fd;
-    // we want to have the filename with extension as the name of the chunk
-    char filename[MAXPDSTRING];
-    snprintf(filename, MAXPDSTRING-1, "%s.pd_lua", name);
-#if LUA_VERSION_NUM	< 502
-    if (lua_load(__L(), pdlua_reader, &reader, filename) || lua_pcall(__L(), 0, 0, 0))
-#else // 5.2 style
-    if (lua_load(__L(), pdlua_reader, &reader, filename, NULL) || lua_pcall(__L(), 0, 0, 0))
-#endif // LUA_VERSION_NUM	< 502
+    char fullpath[MAXPDSTRING];
+    snprintf(fullpath, MAXPDSTRING-1, "%s/%s.pd_lua", dirbuf, name);
+    sys_close(fd);
+    if (luaL_loadfile(__L(), fullpath) || lua_pcall(__L(), 0, 0, 0))
     {
       mylua_error(__L(), NULL, NULL);
       pdlua_clearrequirepath(__L());
@@ -2894,7 +2827,6 @@ static int pdlua_loader_wrappath
       luaL_unref(__L(), LUA_REGISTRYINDEX, load_name_save);
     }
     lua_pop(__L(), 1);
-    sys_close(fd);
   }
   return result;
 }
@@ -2989,7 +2921,6 @@ void pdlua_setup(void)
 #endif
 {
     char                pd_lua_path[MAXPDSTRING];
-    t_pdlua_readerdata  reader;
     int                 fd;
     int                 result;
     char                pdluaver[MAXPDSTRING];
@@ -3119,55 +3050,34 @@ void pdlua_setup(void)
         strcpy(pdlua_cwd, ".");
     snprintf(pd_lua_path, MAXPDSTRING-1, "%s/pd.lua", pdlua_datadir); /* the full path to pd.lua */
     PDLUA_DEBUG("pd_lua_path %s", pd_lua_path);
-    fd = open(pd_lua_path, O_RDONLY);
-/*    fd = canvas_open(canvas_getcurrent(), "pd", ".lua", buf, &ptr, MAXPDSTRING, 1);  looks all over and rarely succeeds */
     PDLUA_DEBUG ("pd.lua loaded from %s", pd_lua_path);
-    PDLUA_DEBUG("pdlua canvas_open done fd = %d", fd);
     PDLUA_DEBUG("pdlua_setup: stack top %d", lua_gettop(__L()));
-    if (fd >= 0)
-    { /* pd.lua was opened */
-        reader.fd = fd;
-        // We need to set up Lua's package.path here so that pdx.lua can be
-        // found (and possibly other pre-loaded extension modules in the
-        // future). Note that we can't just use pdlua_setrequirepath() here
-        // because it calls pd._setrequirepath in pd.lua which isn't loaded
-        // yet at this point.
-        pdlua_packagepath(__L(), pdlua_datadir);
-#if LUA_VERSION_NUM	< 502
-        result = lua_load(__L(), pdlua_reader, &reader, "pd.lua");
-#else // 5.2 style
-        result = lua_load(__L(), pdlua_reader, &reader, "pd.lua", NULL); // mode bt for binary or text
-#endif // LUA_VERSION_NUM	< 502
-        PDLUA_DEBUG ("pdlua lua_load returned %d", result);
-        if (0 == result)
-        {
-            result = lua_pcall(__L(), 0, 0, 0);
-            PDLUA_DEBUG ("pdlua lua_pcall returned %d", result);
-        }
-      
-        if (0 != result)
-        {
-            mylua_error(__L(), NULL, NULL);
-            pd_error(NULL, "lua: loader will not be registered!");
-            pd_error(NULL, "lua: (is `pd.lua' in Pd's path list?)");
-        }
-        else
-        {
-            int maj=0,min=0,bug=0;
-            sys_getversion(&maj,&min,&bug);
-            if((maj==0) && (min<47))
-                /* before Pd<0.47, the loaders had to iterate over each path themselves */
-                sys_register_loader((loader_t)pdlua_loader_legacy);
-            else
-                /* since Pd>=0.47, Pd tries the loaders for each path */
-                sys_register_loader((loader_t)pdlua_loader_pathwise);
-        }
-        close(fd);
+    // Set Lua's package.path early so pdx.lua can be found
+    pdlua_packagepath(__L(), pdlua_datadir);
+    result = luaL_loadfile(__L(), pd_lua_path);
+    PDLUA_DEBUG ("pdlua luaL_loadfile returned %d", result);
+    if (0 == result)
+    {
+        result = lua_pcall(__L(), 0, 0, 0);
+        PDLUA_DEBUG ("pdlua lua_pcall returned %d", result);
+    }
+
+    if (0 != result)
+    {
+        mylua_error(__L(), NULL, NULL);
+        pd_error(NULL, "lua: loader will not be registered!");
+        pd_error(NULL, "lua: is `pd.lua' in Pd's path list?");
     }
     else
     {
-        pd_error(NULL, "lua: error loading `pd.lua': canvas_open() failed");
-        pd_error(NULL, "lua: loader will not be registered!");
+        int maj=0,min=0,bug=0;
+        sys_getversion(&maj,&min,&bug);
+        if((maj==0) && (min<47))
+            /* before Pd<0.47, the loaders had to iterate over each path themselves */
+            sys_register_loader((loader_t)pdlua_loader_legacy);
+        else
+            /* since Pd>=0.47, Pd tries the loaders for each path */
+            sys_register_loader((loader_t)pdlua_loader_pathwise);
     }
 
     pdlua_gfx_setup(__L());
