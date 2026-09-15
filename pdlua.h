@@ -65,7 +65,9 @@ typedef struct _pdlua_gfx
 #ifndef PLUGDATA
     char object_tag[128]; // Tcl/tk tag that is attached to all drawings
     char order_tag[64]; // Tag for invisible line, used to preserve correct object ordering
-    char current_item_tag[64]; // Tcl/tk tag that is only attached to the current drawing in progress
+#ifdef PURR_DATA
+    char current_item_tag[64]; // Per-item id for Purr Data's GUI
+#endif
     char **layer_tags;
     int num_layers;
     char *current_layer_tag;

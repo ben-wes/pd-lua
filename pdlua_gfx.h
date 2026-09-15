@@ -802,8 +802,12 @@ static void gfx_displace(t_pdlua *x, t_glist *glist, int dx, int dy)
 
 static const char *register_drawing(t_pdlua_gfx *gfx)
 {
+#ifndef PURR_DATA
+    return gfx->current_layer_tag;
+#else
     generate_random_id(gfx->current_item_tag, 64);
     return gfx->current_item_tag;
+#endif
 }
 
 static int gfx_initialize(t_pdlua *obj)
