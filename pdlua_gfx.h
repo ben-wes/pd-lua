@@ -1337,20 +1337,15 @@ static int draw_text(lua_State *L) {
         default: anchor = "nw"; break;     // TOP_LEFT
     }
 
-    pdgui_vmess(0, "crr ii rs ri rs rS", cnv, "create", "text",
-                0, 0, "-anchor", anchor, "-width", w, "-text", text, "-tags", 3, tags);
-
     t_atom fontatoms[3];
     SETSYMBOL(fontatoms+0, gensym(sys_font));
     SETFLOAT (fontatoms+1, -font_height); // Size is wrong on hi-dpi Windows if this is not negative
     SETSYMBOL(fontatoms+2, gensym(sys_fontweight));
 
-    pdgui_vmess(0, "crs rA rs rs", cnv, "itemconfigure", tags[1],
-            "-font", 3, fontatoms,
-            "-fill", gfx->current_color,
-            "-justify", "left");
-
-    pdgui_vmess(0, "crs ii", cnv, "coords", tags[1], x, y);
+    pdgui_vmess(0, "crr ii rs ri rs rA rs rS", cnv, "create", "text",
+                x, y, "-anchor", anchor, "-width", w, "-text", text,
+                "-font", 3, fontatoms, "-fill", gfx->current_color,
+                "-tags", 3, tags);
 #else // PURR_DATA
     int x0 = text_xpix((t_object*)obj, obj->canvas);
     int y0 = text_ypix((t_object*)obj, obj->canvas);
