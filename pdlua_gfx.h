@@ -449,7 +449,7 @@ static int stroke_path(lua_State *L) {
     t_canvas *cnv = glist_getcanvas(obj->canvas);
 
     t_path_state *path = (t_path_state*)luaL_checkudata(L, 1, "Path");
-    int stroke_width = luaL_optnumber(L, 2, 1.0f) * glist_getzoom(cnv); // optional, default to 1.0
+    t_float stroke_width = luaL_optnumber(L, 2, 1.0f) * glist_getzoom(cnv); // optional, default to 1.0
 
     int coordinates_size = (2 * path->num_path_segments + 2) * sizeof(t_atom);
     t_atom* coordinates = getbytes(coordinates_size);
@@ -1078,17 +1078,17 @@ static int stroke_ellipse(lua_State *L) {
     int x1, y1, x2, y2;
     get_bounds_args(L, obj, &x1, &y1, &x2, &y2);
 
-    int line_width = luaL_optnumber(L, 5, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
+    t_float line_width = luaL_optnumber(L, 5, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
 
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "oval", x1, y1, x2, y2, "-width", line_width, "-outline", gfx->current_color, "-tags", 3, tags);
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "oval", x1, y1, x2, y2, "-width", line_width, "-outline", gfx->current_color, "-tags", 3, tags);
 #else // PURR_DATA
     int x0 = text_xpix((t_object*)obj, obj->canvas);
     int y0 = text_ypix((t_object*)obj, obj->canvas);
     gui_vmess("gui_luagfx_stroke_ellipse", "xsssiiiii", cnv, tags[2], tags[1],
-              gfx->current_color, line_width,
+              gfx->current_color, (int)line_width,
               x1-x0, y1-y0, x2-x0, y2-y0);
 #endif
 
@@ -1152,17 +1152,17 @@ static int stroke_rect(lua_State *L) {
     int x1, y1, x2, y2;
     get_bounds_args(L, obj, &x1, &y1, &x2, &y2);
 
-    int line_width = luaL_optnumber(L, 5, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
+    t_float line_width = luaL_optnumber(L, 5, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
 
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "rectangle", x1, y1, x2, y2, "-width", line_width, "-outline", gfx->current_color, "-tags", 3, tags);
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "rectangle", x1, y1, x2, y2, "-width", line_width, "-outline", gfx->current_color, "-tags", 3, tags);
 #else // PURR_DATA
     int x0 = text_xpix((t_object*)obj, obj->canvas);
     int y0 = text_ypix((t_object*)obj, obj->canvas);
     gui_vmess("gui_luagfx_stroke_rect", "xsssiiiii", cnv, tags[2], tags[1],
-              gfx->current_color, line_width,
+              gfx->current_color, (int)line_width,
               x1-x0, y1-y0, x2-x0, y2-y0);
 #endif
 
@@ -1219,35 +1219,35 @@ static int stroke_rounded_rect(lua_State *L) {
     int radius_x = radius * glist_getzoom(cnv);
     int radius_y = radius * glist_getzoom(cnv);
     transform_size(gfx, &radius_x, &radius_y);
-    int line_width = luaL_optnumber(L, 6, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
+    t_float line_width = luaL_optnumber(L, 6, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
 
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
     // Tcl/tk can't stroke rounded rectangles either, so we draw 2 lines connecting with 4 arcs at the corners
-    pdgui_vmess(0, "crr iiii ri ri ri ri rs rs rS", cnv, "create", "arc", x1, y1 + radius_y*2, x1 + radius_x*2, y1,
+    pdgui_vmess(0, "crr iiii ri ri rf ri rs rs rS", cnv, "create", "arc", x1, y1 + radius_y*2, x1 + radius_x*2, y1,
                 "-start", 0, "-extent", 90, "-width", line_width, "-start", 90, "-outline", gfx->current_color, "-style", "arc", "-tags", 3, tags);
-    pdgui_vmess(0, "crr iiii ri ri ri ri rs rs rS", cnv, "create", "arc", x2 - radius_x*2, y1, x2, y1 + radius_y*2,
+    pdgui_vmess(0, "crr iiii ri ri rf ri rs rs rS", cnv, "create", "arc", x2 - radius_x*2, y1, x2, y1 + radius_y*2,
                 "-start", 270, "-extent", 90, "-width", line_width, "-start", 0, "-outline", gfx->current_color, "-style", "arc", "-tags", 3, tags);
-    pdgui_vmess(0, "crr iiii ri ri ri ri rs rs rS", cnv, "create", "arc", x1, y2 - radius_y*2, x1 + radius_x*2, y2,
+    pdgui_vmess(0, "crr iiii ri ri rf ri rs rs rS", cnv, "create", "arc", x1, y2 - radius_y*2, x1 + radius_x*2, y2,
                 "-start", 180, "-extent", 90, "-width", line_width, "-start", 180, "-outline", gfx->current_color, "-style", "arc", "-tags", 3, tags);
-    pdgui_vmess(0, "crr iiii ri ri ri ri rs rs rS", cnv, "create", "arc", x2 - radius_x*2, y2, x2, y2 - radius_y*2,
+    pdgui_vmess(0, "crr iiii ri ri rf ri rs rs rS", cnv, "create", "arc", x2 - radius_x*2, y2, x2, y2 - radius_y*2,
                 "-start", 90, "-extent", 90, "-width", line_width, "-start", 270, "-outline", gfx->current_color, "-style", "arc", "-tags", 3, tags);
 
     // Connect with lines
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "line", x1 + radius_x, y1, x2 - radius_x, y1,
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "line", x1 + radius_x, y1, x2 - radius_x, y1,
                 "-width", line_width, "-fill", gfx->current_color, "-tags", 3, tags);
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "line", x1 + radius_y, y2, x2 - radius_y, y2,
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "line", x1 + radius_y, y2, x2 - radius_y, y2,
                 "-width", line_width,  "-fill", gfx->current_color, "-tags", 3, tags);
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "line", x1 , y1 + radius_y, x1, y2 - radius_y,
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "line", x1 , y1 + radius_y, x1, y2 - radius_y,
                 "-width", line_width, "-fill", gfx->current_color, "-tags", 3, tags);
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "line", x2 , y1 + radius_y, x2, y2 - radius_y,
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "line", x2 , y1 + radius_y, x2, y2 - radius_y,
                 "-width", line_width,  "-fill", gfx->current_color, "-tags", 3, tags);
 #else // PURR_DATA
     int x0 = text_xpix((t_object*)obj, obj->canvas);
     int y0 = text_ypix((t_object*)obj, obj->canvas);
     gui_vmess("gui_luagfx_stroke_rounded_rect", "xsssiiiiiii", cnv, tags[2], tags[1],
-              gfx->current_color, line_width,
+              gfx->current_color, (int)line_width,
               x1-x0, y1-y0, x2-x0, y2-y0,
               radius_x, radius_y);
 #endif
@@ -1265,7 +1265,7 @@ static int draw_line(lua_State *L) {
     int y1 = luaL_checknumber(L, 2);
     int x2 = luaL_checknumber(L, 3);
     int y2 = luaL_checknumber(L, 4);
-    int line_width = luaL_optnumber(L, 5, 1.0f); // line width (optional, default to 1.0)
+    t_float line_width = luaL_optnumber(L, 5, 1.0f); // line width (optional, default to 1.0)
 
     transform_point(gfx, &x1, &y1);
     transform_point(gfx, &x2, &y2);
@@ -1286,13 +1286,13 @@ static int draw_line(lua_State *L) {
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "line", x1, y1, x2, y2,
+    pdgui_vmess(0, "crr iiii rf rs rS", cnv, "create", "line", x1, y1, x2, y2,
                 "-width", line_width, "-fill", gfx->current_color, "-tags", 3, tags);
 #else // PURR_DATA
     int x0 = text_xpix((t_object*)obj, obj->canvas);
     int y0 = text_ypix((t_object*)obj, obj->canvas);
     gui_vmess("gui_luagfx_draw_line", "xsssiiiii", cnv, tags[2], tags[1],
-              gfx->current_color, line_width,
+              gfx->current_color, (int)line_width,
               x1-x0, y1-y0, x2-x0, y2-y0);
 #endif
 
@@ -1699,7 +1699,7 @@ static int draw_image(lua_State *L) {
 
 #ifndef PURR_DATA
 static void path_create_item(t_canvas *cnv, t_pdlua_gfx *gfx, t_pdlua *obj,
-    t_path_state *path, const char *item, int stroke_width, const char *fill,
+    t_path_state *path, const char *item, t_float stroke_width, const char *fill,
     const char **tags, int ntags)
 {
     int npoints = path->num_path_segments;
@@ -1717,7 +1717,7 @@ static void path_create_item(t_canvas *cnv, t_pdlua_gfx *gfx, t_pdlua *obj,
         words[i * 2 + 1].w_float = y * canvas_zoom + obj_y;
     }
 
-    pdgui_vmess(0, "crrw ri rs rS", cnv, "create", item, ncoords, words,
+    pdgui_vmess(0, "crrw rf rs rS", cnv, "create", item, ncoords, words,
         "-width", stroke_width, "-fill", fill, "-tags", ntags, tags);
     freebytes(words, ncoords * sizeof(t_word));
 }
@@ -1733,7 +1733,7 @@ static int stroke_path(lua_State *L) {
     if(path->num_path_segments < 3)
         return 0;
 
-    int stroke_width = luaL_optnumber(L, 2, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
+    t_float stroke_width = luaL_optnumber(L, 2, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
 
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
@@ -1742,7 +1742,7 @@ static int stroke_path(lua_State *L) {
 
 #else // PURR_DATA
     gui_start_vmess("gui_luagfx_stroke_path", "xsssi", cnv, tags[2], tags[1],
-                    gfx->current_color, stroke_width);
+                    gfx->current_color, (int)stroke_width);
     gui_start_array();
     for (int i = 0; i < path->num_path_segments; i++) {
         float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
