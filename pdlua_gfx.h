@@ -1698,6 +1698,32 @@ static int draw_image(lua_State *L) {
     return 0;
 }
 
+#ifndef PURR_DATA
+static void path_create_item(t_canvas *cnv, t_pdlua_gfx *gfx, t_pdlua *obj,
+    t_path_state *path, const char *item, int stroke_width, const char *fill,
+    const char **tags, int ntags)
+{
+    int npoints = path->num_path_segments;
+    int ncoords = npoints * 2;
+    int canvas_zoom = glist_getzoom(cnv);
+    int obj_x = text_xpix((t_object*)obj, obj->canvas);
+    int obj_y = text_ypix((t_object*)obj, obj->canvas);
+    t_word *words = getbytes(ncoords * sizeof(t_word));
+
+    for (int i = 0; i < npoints; i++) {
+        float x = path->path_segments[i * 2];
+        float y = path->path_segments[i * 2 + 1];
+        transform_point_float(gfx, &x, &y);
+        words[i * 2].w_float = x * canvas_zoom + obj_x;
+        words[i * 2 + 1].w_float = y * canvas_zoom + obj_y;
+    }
+
+    pdgui_vmess(0, "crrw ri rs rS", cnv, "create", item, ncoords, words,
+        "-width", stroke_width, "-fill", fill, "-tags", ntags, tags);
+    freebytes(words, ncoords * sizeof(t_word));
+}
+#endif
+
 static int stroke_path(lua_State *L) {
     t_pdlua_gfx *gfx = pop_graphics_context(L);
     t_pdlua *obj = gfx->object;
@@ -1709,24 +1735,11 @@ static int stroke_path(lua_State *L) {
         return 0;
 
     int stroke_width = luaL_optnumber(L, 2, 1.0f) * glist_getzoom(cnv); // stroke width (optional, default to 1.0)
-    int obj_x = text_xpix((t_object*)obj, obj->canvas);
-    int obj_y = text_ypix((t_object*)obj, obj->canvas);
-    int canvas_zoom = glist_getzoom(cnv);
 
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "line", 0, 0, 0, 0, "-width", stroke_width, "-fill", gfx->current_color, "-tags", 3, tags);
-
-    t_float *transformed_coordinates = getbytes(path->num_path_segments * 2 * sizeof(t_float));
-    for (int i = 0; i < path->num_path_segments; i++) {
-        float x =  path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
-        transform_point_float(gfx, &x, &y);
-        transformed_coordinates[i * 2] = (x * canvas_zoom) + obj_x;
-        transformed_coordinates[i * 2 + 1] = (y * canvas_zoom) + obj_y;
-    }
-    pdgui_vmess(0, "crs F", cnv, "coords", tags[1], path->num_path_segments*2, transformed_coordinates);
-    freebytes(transformed_coordinates, path->num_path_segments * 2 * sizeof(t_float));
+    path_create_item(cnv, gfx, obj, path, "line", stroke_width, gfx->current_color, tags, 3);
 
 #else // PURR_DATA
     gui_start_vmess("gui_luagfx_stroke_path", "xsssi", cnv, tags[2], tags[1],
@@ -1755,25 +1768,10 @@ static int fill_path(lua_State *L) {
     if(path->num_path_segments < 3)
         return 0;
 
-    // Apply transformations to all coordinates
-    int obj_x = text_xpix((t_object*)obj, obj->canvas);
-    int obj_y = text_ypix((t_object*)obj, obj->canvas);
-    int canvas_zoom = glist_getzoom(cnv);
-
     const char *tags[] = { gfx->object_tag, register_drawing(gfx), gfx->current_layer_tag };
 
 #ifndef PURR_DATA
-    pdgui_vmess(0, "crr iiii ri rs rS", cnv, "create", "polygon", 0, 0, 0, 0, "-width", 0, "-fill", gfx->current_color, "-tags", 3, tags);
-
-    t_float *transformed_coordinates = getbytes(path->num_path_segments * 2 * sizeof(t_float));
-    for (int i = 0; i < path->num_path_segments; i++) {
-        float x =  path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
-        transform_point_float(gfx, &x, &y);
-        transformed_coordinates[i * 2] = (x * canvas_zoom) + obj_x;
-        transformed_coordinates[i * 2 + 1] = (y * canvas_zoom) + obj_y;
-    }
-    pdgui_vmess(0, "crs F", cnv, "coords", tags[1], path->num_path_segments*2, transformed_coordinates);
-    freebytes(transformed_coordinates, path->num_path_segments * 2 * sizeof(t_float));
+    path_create_item(cnv, gfx, obj, path, "polygon", 0, gfx->current_color, tags, 3);
 #else // PURR_DATA
     gui_start_vmess("gui_luagfx_fill_path", "xsssi", cnv, tags[2], tags[1],
                     gfx->current_color, 0);
@@ -1943,6 +1941,6 @@ static int close_path(lua_State *L) {
 static int free_path(lua_State *L)
 {
     t_path_state *path = (t_path_state*)luaL_checkudata(L, 1, "Path");
-    freebytes(path->path_segments, path->num_path_segments_allocated * sizeof(int));
+    freebytes(path->path_segments, path->num_path_segments_allocated * sizeof(float));
     return 0;
 }
