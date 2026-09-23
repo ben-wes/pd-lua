@@ -194,10 +194,10 @@ static void pdlua_gfx_mouse_exit(t_pdlua *x, int xpos, int ypos) {
 typedef struct _path_state
 {
     // Variables for managing vector paths
-    float *path_segments;
+    t_float *path_segments;
     int num_path_segments;
     int num_path_segments_allocated;
-    float path_start_x, path_start_y;
+    t_float path_start_x, path_start_y;
 } t_path_state;
 
 
@@ -456,7 +456,7 @@ static int stroke_path(lua_State *L) {
     SETFLOAT(coordinates, stroke_width);
 
     for (int i = 0; i < path->num_path_segments; i++) {
-        float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
+        t_float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
         SETFLOAT(coordinates + (i * 2) + 1, x);
         SETFLOAT(coordinates + (i * 2) + 2, y);
     }
@@ -479,7 +479,7 @@ static int fill_path(lua_State *L) {
     t_atom* coordinates = getbytes(coordinates_size);
 
     for (int i = 0; i < path->num_path_segments; i++) {
-        float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
+        t_float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
         SETFLOAT(coordinates + (i * 2), x);
         SETFLOAT(coordinates + (i * 2) + 1, y);
     }
@@ -592,7 +592,7 @@ static void transform_point(t_pdlua_gfx *gfx, int *x, int *y) {
     }
 }
 
-static void transform_size_float(t_pdlua_gfx *gfx, float *w, float *h) {
+static void transform_size_float(t_pdlua_gfx *gfx, t_float *w, t_float *h) {
     for(int i = gfx->num_transforms - 1; i >= 0; i--)
     {
         if(gfx->transforms[i].type == SCALE)
@@ -603,7 +603,7 @@ static void transform_size_float(t_pdlua_gfx *gfx, float *w, float *h) {
     }
 }
 
-static void transform_point_float(t_pdlua_gfx *gfx, float *x, float *y) {
+static void transform_point_float(t_pdlua_gfx *gfx, t_float *x, t_float *y) {
     for(int i = gfx->num_transforms - 1; i >= 0; i--)
     {
         if(gfx->transforms[i].type == SCALE)
@@ -1422,9 +1422,9 @@ static int draw_svg(lua_State *L) {
     int canvas_zoom = glist_getzoom(cnv);
 
     // We can only apply scaling with an equal aspect ratio, so we only use the first scale coordinate
-    float scale_x = canvas_zoom, scale_y = canvas_zoom;
+    t_float scale_x = canvas_zoom, scale_y = canvas_zoom;
     transform_size_float(gfx, &scale_x, &scale_y);
-    float scale = (scale_x + scale_y) * 0.5f;
+    float scale = (float)((scale_x + scale_y) * 0.5);
 
     char *svg_text = strdup(luaL_checkstring(L, 1));
     uint64_t svg_hash = pdlua_image_hash((unsigned char*)svg_text, scale);
@@ -1539,9 +1539,9 @@ static int draw_image(lua_State *L) {
     t_canvas *cnv = glist_getcanvas(obj->canvas);
     int canvas_zoom = glist_getzoom(cnv);
 
-    float scale_x = canvas_zoom, scale_y = canvas_zoom;
+    t_float scale_x = canvas_zoom, scale_y = canvas_zoom;
     transform_size_float(gfx, &scale_x, &scale_y);
-    float scale = (scale_x + scale_y) * 0.5f;
+    float scale = (float)((scale_x + scale_y) * 0.5);
 
     const char *image_path = luaL_checkstring(L, 1);
     int x = luaL_checknumber(L, 2);
@@ -1710,8 +1710,8 @@ static void path_create_item(t_canvas *cnv, t_pdlua_gfx *gfx, t_pdlua *obj,
     t_word *words = getbytes(ncoords * sizeof(t_word));
 
     for (int i = 0; i < npoints; i++) {
-        float x = path->path_segments[i * 2];
-        float y = path->path_segments[i * 2 + 1];
+        t_float x = path->path_segments[i * 2];
+        t_float y = path->path_segments[i * 2 + 1];
         transform_point_float(gfx, &x, &y);
         words[i * 2].w_float = x * canvas_zoom + obj_x;
         words[i * 2 + 1].w_float = y * canvas_zoom + obj_y;
@@ -1745,7 +1745,7 @@ static int stroke_path(lua_State *L) {
                     gfx->current_color, (int)stroke_width);
     gui_start_array();
     for (int i = 0; i < path->num_path_segments; i++) {
-        float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
+        t_float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
         transform_point_float(gfx, &x, &y);
         gui_s(i==0?"M":"L");
         gui_f(x); gui_f(y);
@@ -1776,7 +1776,7 @@ static int fill_path(lua_State *L) {
                     gfx->current_color, 0);
     gui_start_array();
     for (int i = 0; i < path->num_path_segments; i++) {
-        float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
+        t_float x = path->path_segments[i * 2], y = path->path_segments[i * 2 + 1];
         transform_point_float(gfx, &x, &y);
         gui_s(i==0?"M":"L");
         gui_f(x); gui_f(y);
@@ -1827,16 +1827,16 @@ static int reset_transform(lua_State *L) {
 }
 #endif
 
-static void add_path_segment(t_path_state *path, float x, float y)
+static void add_path_segment(t_path_state *path, t_float x, t_float y)
 {
     int path_segment_space = (path->num_path_segments + 1) * 2;
     int old_size = path->num_path_segments_allocated;
     int new_size = MAX(path_segment_space, path->num_path_segments_allocated);
 
     if(!path->num_path_segments_allocated)
-        path->path_segments = (float*)getbytes(new_size * sizeof(float));
+        path->path_segments = (t_float*)getbytes(new_size * sizeof(t_float));
     else
-        path->path_segments = (float*)resizebytes(path->path_segments, old_size * sizeof(float), new_size * sizeof(float));
+        path->path_segments = (t_float*)resizebytes(path->path_segments, old_size * sizeof(t_float), new_size * sizeof(t_float));
 
     path->num_path_segments_allocated = new_size;
 
@@ -1861,36 +1861,36 @@ static int start_path(lua_State *L) {
 // Function to add a line to the current path
 static int line_to(lua_State *L) {
     t_path_state *path = (t_path_state*)luaL_checkudata(L, 1, "Path");
-    float x = luaL_checknumber(L, 2);
-    float y = luaL_checknumber(L, 3);
+    t_float x = luaL_checknumber(L, 2);
+    t_float y = luaL_checknumber(L, 3);
     add_path_segment(path, x, y);
     return 0;
 }
 
 static int quad_to(lua_State *L) {
     t_path_state *path = (t_path_state*)luaL_checkudata(L, 1, "Path");
-    float x2 = luaL_checknumber(L, 2);
-    float y2 = luaL_checknumber(L, 3);
-    float x3 = luaL_checknumber(L, 4);
-    float y3 = luaL_checknumber(L, 5);
+    t_float x2 = luaL_checknumber(L, 2);
+    t_float y2 = luaL_checknumber(L, 3);
+    t_float x3 = luaL_checknumber(L, 4);
+    t_float y3 = luaL_checknumber(L, 5);
 
-    float x1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2] : x2;
-    float y1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2 + 1] : y2;
+    t_float x1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2] : x2;
+    t_float y1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2 + 1] : y2;
 
     // heuristic for deciding the number of lines in our bezier curve
-    float dx = x3 - x1;
-    float dy = y3 - y1;
-    float distance = sqrtf(dx * dx + dy * dy);
-    float resolution = MAX(10.0f, distance);
+    t_float dx = x3 - x1;
+    t_float dy = y3 - y1;
+    t_float distance = (t_float)sqrt((double)dx * (double)dx + (double)dy * (double)dy);
+    t_float resolution = MAX((t_float)10.0, distance);
 
     // Get the last point
-    float t = 0.0;
+    t_float t = 0.0;
     while (t <= 1.0) {
         t += 1.0 / resolution;
 
         // Calculate quadratic bezier curve as points (source: https://en.wikipedia.org/wiki/B%C3%A9zier_curve)
-        float x = (1.0f - t) * (1.0f - t) * x1 + 2.0f * (1.0f - t) * t * x2 + t * t * x3;
-        float y = (1.0f - t) * (1.0f - t) * y1 + 2.0f * (1.0f - t) * t * y2 + t * t * y3;
+        t_float x = (1.0 - t) * (1.0 - t) * x1 + 2.0 * (1.0 - t) * t * x2 + t * t * x3;
+        t_float y = (1.0 - t) * (1.0 - t) * y1 + 2.0 * (1.0 - t) * t * y2 + t * t * y3;
         add_path_segment(path, x, y);
     }
 
@@ -1899,30 +1899,30 @@ static int quad_to(lua_State *L) {
 
 static int cubic_to(lua_State *L) {
     t_path_state *path = (t_path_state*)luaL_checkudata(L, 1, "Path");
-    float x2 = luaL_checknumber(L, 2);
-    float y2 = luaL_checknumber(L, 3);
-    float x3 = luaL_checknumber(L, 4);
-    float y3 = luaL_checknumber(L, 5);
-    float x4 = luaL_checknumber(L, 6);
-    float y4 = luaL_checknumber(L, 7);
+    t_float x2 = luaL_checknumber(L, 2);
+    t_float y2 = luaL_checknumber(L, 3);
+    t_float x3 = luaL_checknumber(L, 4);
+    t_float y3 = luaL_checknumber(L, 5);
+    t_float x4 = luaL_checknumber(L, 6);
+    t_float y4 = luaL_checknumber(L, 7);
 
-    float x1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2] : x2;
-    float y1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2 + 1] : y2;
+    t_float x1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2] : x2;
+    t_float y1 = path->num_path_segments > 0 ? path->path_segments[(path->num_path_segments - 1) * 2 + 1] : y2;
 
     // heuristic for deciding the number of lines in our bezier curve
-    float dx = x3 - x1;
-    float dy = y3 - y1;
-    float distance = sqrtf(dx * dx + dy * dy);
-    float resolution = MAX(10.0f, distance);
+    t_float dx = x3 - x1;
+    t_float dy = y3 - y1;
+    t_float distance = (t_float)sqrt((double)dx * (double)dx + (double)dy * (double)dy);
+    t_float resolution = MAX((t_float)10.0, distance);
 
     // Get the last point
-    float t = 0.0;
+    t_float t = 0.0;
     while (t <= 1.0) {
         t += 1.0 / resolution;
 
         // Calculate cubic bezier curve as points (source: https://en.wikipedia.org/wiki/B%C3%A9zier_curve)
-        float x = (1 - t)*(1 - t)*(1 - t) * x1 + 3 * (1 - t)*(1 - t) * t * x2 + 3 * (1 - t) * t*t * x3 + t*t*t * x4;
-        float y = (1 - t)*(1 - t)*(1 - t) * y1 + 3 * (1 - t)*(1 - t) * t * y2 + 3 * (1 - t) * t*t * y3 + t*t*t * y4;
+        t_float x = (1 - t)*(1 - t)*(1 - t) * x1 + 3 * (1 - t)*(1 - t) * t * x2 + 3 * (1 - t) * t*t * x3 + t*t*t * x4;
+        t_float y = (1 - t)*(1 - t)*(1 - t) * y1 + 3 * (1 - t)*(1 - t) * t * y2 + 3 * (1 - t) * t*t * y3 + t*t*t * y4;
 
         add_path_segment(path, x, y);
     }
@@ -1940,6 +1940,6 @@ static int close_path(lua_State *L) {
 static int free_path(lua_State *L)
 {
     t_path_state *path = (t_path_state*)luaL_checkudata(L, 1, "Path");
-    freebytes(path->path_segments, path->num_path_segments_allocated * sizeof(float));
+    freebytes(path->path_segments, path->num_path_segments_allocated * sizeof(t_float));
     return 0;
 }

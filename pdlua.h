@@ -22,7 +22,7 @@ typedef enum {SCALE, TRANSLATE} transform_type;
 typedef struct _gfx_transform
 {
     transform_type type;
-    float x, y;
+    t_float x, y;
 } gfx_transform;
 
 #define MAX_PENDING_PROPERTIES 128
