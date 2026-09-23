@@ -79,6 +79,10 @@ typedef struct _pdlua_gfx
     int mouse_x, mouse_y, mouse_down, mouse_inside;
     int first_draw;
     int paint_generation;
+    /* One pending repaint, delivered by sys_queuegui. layer 0 means all layers. */
+    int repaint_queued;
+    int repaint_first;
+    int repaint_layer;
 #ifndef PURR_DATA
     uint64_t *images;
     uint32_t *images_last_used;

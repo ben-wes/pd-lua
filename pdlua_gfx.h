@@ -126,16 +126,17 @@ static void pdlua_gfx_free(t_pdlua_gfx *gfx) {
 #endif
 }
 
-// Trigger repaint callback in lua script
-static void pdlua_gfx_repaint(t_pdlua *o, int firsttime) {
+/* Run the Lua paint methods. layer 0 paints every layer. */
+static void pdlua_gfx_repaint_do(t_pdlua *o, int firsttime, int layer) {
 #ifndef PLUGDATA
     o->gfx.first_draw = firsttime;
 #endif
     lua_getglobal(__L(), "pd");
     lua_getfield (__L(), -1, "_repaint");
     lua_pushlightuserdata(__L(), o);
+    lua_pushinteger(__L(), layer);
 
-    if (lua_pcall(__L(), 1, 0, 0))
+    if (lua_pcall(__L(), 2, 0, 0))
     {
         mylua_error(__L(), o, "repaint");
     }
@@ -144,6 +145,69 @@ static void pdlua_gfx_repaint(t_pdlua *o, int firsttime) {
 #ifndef PLUGDATA
     o->gfx.first_draw = 0;
 #endif
+}
+
+#ifndef PLUGDATA
+/* Drop a not-yet-run repaint. Safe if nothing is queued. */
+static void pdlua_gfx_cancel_repaint(t_pdlua *o) {
+    sys_unqueuegui(&o->pd.te_g);
+    o->gfx.repaint_queued = 0;
+    o->gfx.repaint_first = 0;
+    o->gfx.repaint_layer = 0;
+}
+
+static void pdlua_repaint_callback(t_gobj *client, t_glist *glist) {
+    t_pdlua *o = (t_pdlua *)client;
+    int first = o->gfx.repaint_first;
+    int layer = o->gfx.repaint_layer;
+    (void)glist;
+    /* Clear before painting so a repaint() during paint can queue the next frame. */
+    o->gfx.repaint_queued = 0;
+    o->gfx.repaint_first = 0;
+    o->gfx.repaint_layer = 0;
+    pdlua_gfx_repaint_do(o, first, layer);
+}
+
+/* Coalesce onto one sys_queuegui slot. Pd pauses that queue while the GUI
+   has not answered pdtk_ping, which is what keeps a modal save dialog from
+   filling the blocking GUI socket. */
+static void pdlua_queue_repaint(t_pdlua *o, int firsttime, int layer) {
+    if (layer < 0) layer = 0;
+    if (firsttime)
+        o->gfx.repaint_first = 1;
+    if (!o->gfx.repaint_queued) {
+        o->gfx.repaint_queued = 1;
+        o->gfx.repaint_layer = layer;
+        sys_queuegui(&o->pd.te_g, o->canvas, pdlua_repaint_callback);
+    } else if (layer == 0 || o->gfx.repaint_layer == 0 || layer != o->gfx.repaint_layer) {
+        o->gfx.repaint_layer = 0;
+    }
+}
+#else
+static void pdlua_gfx_cancel_repaint(t_pdlua *o) { (void)o; }
+#endif
+
+static void pdlua_gfx_repaint(t_pdlua *o, int firsttime) {
+#ifndef PLUGDATA
+    pdlua_queue_repaint(o, firsttime, 0);
+#else
+    pdlua_gfx_repaint_do(o, firsttime, 0);
+#endif
+}
+
+static int pdlua_gfx_queue_repaint(lua_State *L) {
+    if (!lua_islightuserdata(L, 1))
+        return 0;
+    t_pdlua *o = (t_pdlua *)lua_touserdata(L, 1);
+    int layer = 0;
+    if (lua_isnumber(L, 2))
+        layer = (int)lua_tointeger(L, 2);
+#ifndef PLUGDATA
+    pdlua_queue_repaint(o, 0, layer);
+#else
+    pdlua_gfx_repaint_do(o, 0, layer);
+#endif
+    return 0;
 }
 
 // Pass mouse events to lua script
@@ -267,6 +331,11 @@ static int pdlua_gfx_setup(lua_State *L) {
     // Register functions with Lua
     luaL_newlib(L, gfx_lib);
     lua_setglobal(L, "_gfx_internal");
+
+    lua_getglobal(L, "pd");
+    lua_pushcfunction(L, pdlua_gfx_queue_repaint);
+    lua_setfield(L, -2, "_queue_repaint");
+    lua_pop(L, 1);
 
     return 1; // Number of values pushed onto the stack
 }
@@ -890,7 +959,9 @@ static int start_paint(lua_State *L) {
 #ifndef PURR_DATA
         if(layer > gfx->num_layers) // If we get here, we have skipped a layer. This isn't allowed, so we should instead repaint everything
         {
-            pdlua_gfx_repaint(obj, 0);
+            /* Synchronous: this is a correction of the paint already in progress,
+               and that paint is itself inside the GUI queue. */
+            pdlua_gfx_repaint_do(obj, obj->gfx.first_draw, 0);
             lua_pushnil(L);
             return 1;
         }
