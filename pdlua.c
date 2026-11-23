@@ -63,9 +63,20 @@
 typedef void (*t_signal_setmultiout_fn)(t_signal **, int); 
 static t_signal_setmultiout_fn g_signal_setmultiout;
 
-// function pointer type for glist_getrtext/glist_findrtext (changes with Pd 0.56)
-typedef t_rtext *(*t_glist_rtext_fn)(t_glist *, t_text *);
-static t_glist_rtext_fn g_glist_getrtext;
+// Pd 0.56 replaced glist_findrtext(glist, text) with
+// glist_getrtext(glist, text, really): look up whichever this Pd has, and
+// call each with its own signature.
+typedef t_rtext *(*t_glist_findrtext_fn)(t_glist *, t_text *);
+typedef t_rtext *(*t_glist_getrtext_fn)(t_glist *, t_text *, int);
+static t_glist_findrtext_fn g_glist_findrtext; // Pd < 0.56
+static t_glist_getrtext_fn g_glist_getrtext;   // Pd >= 0.56
+
+static t_rtext *pdlua_getrtext(t_glist *gl, t_text *who)
+{
+    // really = 0, as Pd itself calls it: set_args only redraws objects
+    // that gobj_shouldvis() says are visible
+    return g_glist_getrtext ? g_glist_getrtext(gl, who, 0) : g_glist_findrtext(gl, who);
+}
 
 // Check for absolute filenames in the second argument. Otherwise,
 // open_via_path will happily prepend the given path anyway.
@@ -1316,7 +1327,7 @@ static int pdlua_set_arguments(lua_State *L)
             if (redraw) {
                 // update the text in the object box; this makes sure that
                 // the arguments in the display are what we just set
-                t_rtext *y = g_glist_getrtext(o->canvas, x);
+                t_rtext *y = pdlua_getrtext(o->canvas, x);
                 rtext_retext(y);
                 // redraw the object and its iolets (including incident
                 // cord lines), in case the object box size has changed
@@ -3053,23 +3064,23 @@ void pdlua_setup(void)
             (LPCSTR)&pd_typedmess, &module)) {
         g_signal_setmultiout = (t_signal_setmultiout_fn)(void *)GetProcAddress(
             module, "signal_setmultiout");
-        g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_getrtext");
+        g_glist_getrtext = (t_glist_getrtext_fn)(void *)GetProcAddress(module, "glist_getrtext");
         if (!g_glist_getrtext)
-            g_glist_getrtext = (t_glist_rtext_fn)(void *)GetProcAddress(module, "glist_findrtext");
+            g_glist_findrtext = (t_glist_findrtext_fn)(void *)GetProcAddress(module, "glist_findrtext");
     }
 #else
     // search recursively, starting from the main program
     g_signal_setmultiout = (t_signal_setmultiout_fn)dlsym(
         dlopen(NULL, RTLD_NOW), "signal_setmultiout");
-    g_glist_getrtext = (t_glist_rtext_fn)dlsym(
+    g_glist_getrtext = (t_glist_getrtext_fn)dlsym(
         dlopen(NULL, RTLD_NOW), "glist_getrtext");
     if (!g_glist_getrtext)
-        g_glist_getrtext = (t_glist_rtext_fn)dlsym(
+        g_glist_findrtext = (t_glist_findrtext_fn)dlsym(
             dlopen(NULL, RTLD_NOW), "glist_findrtext");
 #endif
 
-    // check if g_glist_getrtext was loaded successfully
-    if (!g_glist_getrtext) {
+    // check if glist_getrtext or glist_findrtext was loaded successfully
+    if (!g_glist_getrtext && !g_glist_findrtext) {
         pd_error(NULL, "pdlua: failed to load pd's glist_getrtext/glist_findrtext functions");
         pd_error(NULL, "pdlua: loader will not be registered!");
         return;
